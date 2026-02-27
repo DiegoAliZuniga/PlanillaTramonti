@@ -1,0 +1,1116 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Planilla CR (Formulario + Excel)</title>
+
+  <!-- SheetJS (XLSX) -->
+  <!-- Opción rápida con internet (CDN). Si querés offline: descargá xlsx.full.min.js y cambiá el src. -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- ExcelJS para exportar preservando formatos/estilos -->
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+
+
+  <!-- html2canvas para "Generar Imagen" -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#f3f4f6;
+      --card:#ffffff;
+      --stroke:#d1d5db;
+      --text:#111827;
+      --muted:#6b7280;
+      --btn:#e5e7eb;
+      --btn2:#1f6feb;
+    }
+    body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text);margin:0}
+    /* Un poco más ancho para que el formulario tenga aire a la derecha */
+    .wrap{max-width:1320px;margin:22px auto;padding:0 16px}
+    .topbar{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .pill{background:#fff;border:1px solid var(--stroke);padding:8px 10px;border-radius:999px;font-size:13px;color:var(--muted)}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    button{border:1px solid var(--stroke);background:var(--btn);padding:10px 14px;border-radius:12px;cursor:pointer}
+    button.primary{background:var(--btn2);border-color:var(--btn2);color:#fff}
+    button:disabled{opacity:.6;cursor:not-allowed}
+
+    /* Layout: menu + panel */
+    .layout{display:grid;grid-template-columns:260px 1fr;gap:14px}
+    .menu{background:var(--card);border:1px solid var(--stroke);border-radius:18px;padding:12px}
+    .menu h3{margin:6px 8px 10px;font-size:14px;color:var(--muted);font-weight:600}
+    .navbtn{width:100%;text-align:left;border-radius:14px;padding:10px 12px;margin:4px 0}
+    .navbtn.active{background:#eef2ff;border-color:#c7d2fe}
+    .panel{background:var(--card);border:1px solid var(--stroke);border-radius:18px;padding:14px;min-height:520px}
+
+    /* Start overlay */
+    .overlay{position:fixed;inset:0;background:rgba(17,24,39,.65);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+    .modal{width:min(720px,100%);background:#fff;border-radius:18px;border:1px solid var(--stroke);padding:18px}
+    .modal h1{margin:0 0 8px;font-size:20px}
+    .modal p{margin:0 0 12px;color:var(--muted)}
+    .filebox{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    input[type="file"]{padding:10px;border:1px dashed var(--stroke);border-radius:12px;background:#fafafa}
+    .warn{color:#b00020;font-size:13px;margin-top:8px}
+
+    /* Form (mimics your VBA layout) */
+    .form-shell{
+      border:1px solid var(--stroke);
+      border-radius:18px;
+      /* Más “fondo” a la derecha para que no se sobresalgan Horas Extra/Comida */
+      padding:18px 32px 26px 18px;
+      background:
+        radial-gradient(1200px 700px at 80% 20%, rgba(229,231,235,.4), transparent 60%),
+        radial-gradient(800px 500px at 20% 60%, rgba(243,244,246,.9), transparent 60%),
+        #fbfbfb;
+    }
+    .form-title{font-size:14px;color:var(--muted);margin-bottom:12px}
+    .frm-grid{display:grid;grid-template-columns:200px 1fr 200px 1fr;gap:12px;align-items:center}
+    .lbl{justify-self:end;font-weight:600}
+    .inp, .sel{
+      width:100%;
+      padding:10px 12px;
+      border:1px solid #bdbdbd;
+      border-radius:10px;
+      background:#fff;
+      font-size:14px;
+      line-height:1.25;
+      min-height:44px;
+    }
+    .inp[readonly]{background:#f8fafc}
+    .divider{height:10px}
+    .field{display:flex;flex-direction:column;min-width:0}
+    .mid-grid{display:grid;grid-template-columns:1fr 1fr 1fr;column-gap:28px;row-gap:26px;margin-top:14px;align-items:start}
+    .field .t{font-weight:700;text-align:center;margin-bottom:10px;line-height:1.25}
+    .kpis{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+    .kpi{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:12px 14px;border-radius:12px;background:rgba(243,244,246,.85);border:1px solid #e5e7eb
+    }
+    .kpi .name{font-weight:800}
+    .kpi .val{font-variant-numeric:tabular-nums;font-weight:800}
+    /* Más espacio vertical antes de la firma */
+    .firma{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-top:28px;padding-top:6px;color:var(--muted)}
+    .line{width:360px;border-bottom:2px solid #9ca3af;height:0}
+
+    .form-actions{display:flex;justify-content:space-between;gap:10px;margin-top:16px;flex-wrap:wrap}
+    .right-actions{display:flex;gap:10px;flex-wrap:wrap}
+
+    /* Tables */
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid #eee;padding:8px 6px;font-size:13px}
+    th{color:var(--muted);text-align:left;font-weight:700}
+    td.num{text-align:right;font-variant-numeric:tabular-nums}
+    .small{font-size:12px;color:var(--muted)}
+    .ok{color:#0a7a2a}
+  
+    
+    /* Filtros Planilla: layout sin solapes (grid con áreas) */
+    .filters{
+      display:grid !important;
+      grid-template-columns: minmax(260px, 1fr) minmax(210px, 260px) minmax(210px, 260px) minmax(160px, max-content);
+      grid-template-areas: "emp desde hasta clear";
+      gap:14px 14px;
+      align-items:end;
+    }
+    .filters > div{min-width:0}
+    .filters .f-emp{grid-area:emp; display:flex; flex-direction:column; gap:6px; min-width:260px;}
+    .filters .f-date{display:flex; flex-direction:column; gap:6px; min-width:210px;}
+    .filters .f-desde{grid-area:desde;}
+    .filters .f-hasta{grid-area:hasta;}
+    .filters .f-clear{grid-area:clear; display:flex; justify-content:flex-end; align-items:center;}
+    .filters .f-clear button{white-space:nowrap; min-width:160px;}
+
+    /* Evitar que inputs de tipo date “empujen” el grid */
+    .filters input[type="date"]{min-width:0; max-width:100%;}
+    .filters select{min-width:0; max-width:100%;}
+
+    @media (max-width: 980px){
+      .filters{
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+          "emp emp"
+          "desde hasta"
+          "clear clear";
+      }
+      .filters .f-clear{justify-content:flex-end;}
+    }
+    @media (max-width: 560px){
+      .filters{
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "emp"
+          "desde"
+          "hasta"
+          "clear";
+      }
+      .filters .f-clear button{width:100%;}
+    }
+    /* Asegura que el botón se estire sin salirse del grid */
+    .filters > div:last-child{justify-self:stretch;}
+    .filters > div:last-child button{width:100%;}
+
+    /* ===========================
+       Responsive (tel/tablet)
+       =========================== */
+
+    /* Tablet: menú más compacto */
+    @media (max-width: 1024px){
+      .wrap{max-width:100%; padding:0 12px}
+      .layout{grid-template-columns:220px 1fr}
+      .panel{padding:12px}
+    }
+
+    /* Tablet/phone: menú arriba (scroll horizontal) + panel debajo */
+    @media (max-width: 860px){
+      .layout{grid-template-columns:1fr; gap:12px}
+      .menu{
+        padding:10px;
+        display:flex;
+        gap:10px;
+        align-items:center;
+        overflow-x:auto;
+        -webkit-overflow-scrolling:touch;
+      }
+      .menu h3{display:none}
+      .menu .small{display:none}
+      .navbtn{
+        width:auto;
+        white-space:nowrap;
+        margin:0;
+        flex:0 0 auto;
+      }
+
+      /* Form: labels arriba */
+      .frm-grid{
+        grid-template-columns:1fr;
+        gap:10px;
+        align-items:stretch;
+      }
+      .frm-grid > div:empty{display:none}
+      .lbl{
+        justify-self:start;
+        margin-top:6px;
+      }
+
+      /* Inputs más cómodos al tacto */
+      .inp, .sel{
+        min-height:48px;
+        font-size:16px; /* evita zoom automático en iOS */
+      }
+
+      /* Campos centrales: 2 columnas en tablet */
+      .mid-grid{grid-template-columns:1fr 1fr; column-gap:16px; row-gap:18px}
+      .kpis{grid-template-columns:1fr; gap:10px}
+
+      .firma{justify-content:flex-start}
+      .line{width:100%}
+
+      .form-actions{justify-content:flex-end}
+      .right-actions{width:100%}
+      .right-actions button{flex:1}
+    }
+
+    /* Phone: todo a 1 columna */
+    @media (max-width: 520px){
+      .form-shell{padding:14px 14px 18px}
+      .mid-grid{grid-template-columns:1fr}
+      .kpi{flex-direction:column; align-items:flex-start; gap:6px}
+      .kpi .val{align-self:flex-end}
+      .topbar{flex-direction:column; align-items:stretch}
+      .actions{justify-content:flex-end}
+      .pill{width:100%}
+    }
+
+</style>
+</head>
+
+<body>
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h1>Seleccioná tu archivo de Excel</h1>
+    <p>Esto no modifica el archivo en disco automáticamente. Se carga en el navegador, lo editás con el formulario, y al final descargás el Excel actualizado.</p>
+    <div class="filebox">
+      <input id="file" type="file" accept=".xlsx,.xlsm,.xls" />
+      <button id="btnLoad" class="primary" disabled>Cargar</button>
+    </div>
+    <div class="warn" id="loadErr"></div>
+    <p class="small" style="margin-top:10px">
+
+    </p>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="pill" id="fileInfo">Archivo: (ninguno)</div>
+    <div class="actions">
+      <button id="btnDownload" class="primary" disabled>Descargar Excel actualizado</button>
+      <button id="btnReset">Cambiar archivo</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="menu">
+      <h3>Menú</h3>
+      <button class="navbtn active" data-tab="form">Formulario</button>
+      <button class="navbtn" data-tab="params">Parámetros</button>
+      <button class="navbtn" data-tab="empleados">Empleados</button>
+      <button class="navbtn" data-tab="planilla">Planilla</button>
+      <button class="navbtn" data-tab="aguinaldo">Aguinaldo</button>
+      <div class="small" style="margin:10px 8px 0">
+        Consejo: primero revisá <b>Parámetros</b> (horas/día, CCSS, factor feriado).
+      </div>
+    </div>
+
+    <div class="panel">
+      <!-- FORM TAB -->
+      <div id="tab-form">
+        <div class="form-shell" id="captureArea">
+          <div class="form-title">Ingreso Planilla Quincenal</div>
+
+          <div class="frm-grid">
+            <div class="lbl">Seleccione Empleado</div>
+            <select class="sel" id="fEmpleado"></select>
+            <div></div><div></div>
+
+            <div class="lbl">Nombre Completo</div>
+            <input class="inp" id="fNombre" readonly />
+
+            <div></div><div></div>
+
+            <div class="lbl">Valor por Hora</div>
+            <input class="inp" id="fVH" readonly />
+            <div class="lbl">Valor por Hora Extra</div>
+            <input class="inp" id="fVHE" readonly />
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="mid-grid">
+            <div class="field">
+              <div class="t">Fecha de Pago</div>
+              <input class="inp" id="fFecha" type="date"/>
+            </div>
+            <div class="field">
+              <div class="t">Horas Laboradas</div>
+              <input class="inp" id="fHoras" inputmode="decimal" placeholder="Ej: 91"/>
+            </div>
+            <div class="field">
+              <div class="t">Horas Extra</div>
+              <input class="inp" id="fHorasExtra" inputmode="decimal" placeholder="Ej: 4"/>
+            </div>
+
+            <div class="field">
+              <div class="t">Días Libres</div>
+              <input class="inp" id="fDiasLibres" inputmode="decimal" placeholder="Ej: 2"/>
+            </div>
+            <div class="field">
+              <div class="t">Feriados</div>
+              <input class="inp" id="fFeriados" inputmode="decimal" placeholder="Ej: 0"/>
+            </div>
+            <div class="field">
+              <div class="t">Comida</div>
+              <input class="inp" id="fComida" inputmode="decimal" placeholder="Ej: 2200"/>
+            </div>
+          </div>
+
+          <div class="kpis">
+            <div class="kpi"><span class="name">Salario Bruto</span><span class="val" id="kBruto">¢ 0,00</span></div>
+            <div class="kpi"><span class="name">CCSS</span><span class="val" id="kCCSS">¢ 0,00</span></div>
+            <div class="kpi"><span class="name">Subtotal</span><span class="val" id="kSubtotal">¢ 0,00</span></div>
+            <div class="kpi"><span class="name">Salario Neto</span><span class="val" id="kNeto">¢ 0,00</span></div>
+          </div>
+
+          <div class="firma"><span>Firma</span><span class="line"></span></div>
+
+          <div class="form-actions">
+            <div class="right-actions" style="margin-left:auto">
+              <button id="btnImg">Generar Imagen</button>
+              <button id="btnLimpiar">Limpiar</button>
+              <button id="btnGuardar" class="primary">Guardar</button>
+            </div>
+          </div>
+
+          <div class="warn" id="formMsg" style="margin-top:10px"></div>
+          <div class="small" id="formOk" style="margin-top:6px"></div>
+        </div>
+      </div>
+
+      <!-- PARAMS TAB -->
+      <div id="tab-params" style="display:none">
+        <h2 style="margin:0 0 10px">Parámetros</h2>
+        <div class="small" style="margin-bottom:12px">Se guardan en la hoja <b>Parámetros</b> (celdas B4, B7, B8, B9).</div>
+
+        <div class="mid-grid">
+          <div class="field">
+            <div class="t">Año pago aguinaldo (diciembre)</div>
+            <input class="inp" id="pAnio" type="number" />
+            <div class="small">Esto define el periodo 01/dic (año-1) → 30/nov (año)</div>
+          </div>
+          <div class="field">
+            <div class="t">Horas por día</div>
+            <input class="inp" id="pHPD" inputmode="decimal"/>
+          </div>
+          <div class="field">
+            <div class="t">Factor pago feriado</div>
+            <input class="inp" id="pFactorF" inputmode="decimal"/>
+          </div>
+          <div class="field">
+            <div class="t">Tasa CCSS trabajador</div>
+            <input class="inp" id="pCCSS" inputmode="decimal"/>
+            <div class="small">Ej: 0.1083 = 10.83%</div>
+          </div>
+          <div class="field">
+            <div class="t">Frecuencia</div>
+            <input class="inp" id="pFreq" readonly />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:14px;display:flex;gap:10px;justify-content:flex-end">
+          <button id="btnParamsReload">Recargar</button>
+          <button id="btnParamsSave" class="primary">Guardar parámetros</button>
+        </div>
+        <div id="paramsMsg" class="small" style="margin-top:10px"></div>
+      </div>
+
+      
+      <!-- EMPLEADOS TAB -->
+      <div id="tab-empleados" style="display:none">
+        <h2 style="margin:0 0 10px">Empleados</h2>
+        <div class="small" style="margin-bottom:10px">Lee la hoja <b>Empleados</b>. Podés filtrar por código o nombre.</div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+          <input class="inp" id="empFilter" placeholder="Buscar (código o nombre)..." style="max-width:360px"/>
+          <button id="btnEmpReload">Recargar</button>
+          <div class="small" id="empCount"></div>
+        </div>
+
+        <div style="overflow:auto;max-height:520px;border:1px solid var(--stroke);border-radius:14px">
+          <table>
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Nombre</th>
+                <th class="num">Valor Hora</th>
+                <th class="num">Valor Hora Extra</th>
+                <th>Activo</th>
+              </tr>
+            </thead>
+            <tbody id="tblEmpleados"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PLANILLA TAB -->
+      <div id="tab-planilla" style="display:none">
+        <h2 style="margin:0 0 10px">Planilla (vista)</h2>
+        <div class="small" style="margin-bottom:10px">Lee filas de la hoja <b>Planilla</b> (rango con fórmulas: 3 → 3000) y calcula montos con los parámetros actuales.</div>
+
+        <div class="filters" style="margin:10px 0 12px">
+          <div class="f-emp">
+            <label class="small" for="pEmpleado"><b>Empleado</b></label>
+            <select id="pEmpleado" class="sel">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div class="f-date f-desde">
+            <label class="small" for="pDesde"><b>Desde</b></label>
+            <input id="pDesde" type="date" class="inp" />
+          </div>
+          <div class="f-date f-hasta">
+            <label class="small" for="pHasta"><b>Hasta</b></label>
+            <input id="pHasta" type="date" class="inp" />
+          </div>
+          <div class="f-clear">
+            <button id="pClear" type="button">Limpiar filtro</button>
+          </div>
+        </div>
+
+        <div style="overflow:auto;max-height:520px;border:1px solid var(--stroke);border-radius:14px">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th><th>Código</th><th>Nombre</th>
+                <th class="num">Bruto</th><th class="num">Subtotal</th><th class="num">CCSS</th><th class="num">Neto</th>
+              </tr>
+            </thead>
+            <tbody id="tblPlanilla"></tbody>
+          </table>
+        </div>
+        <div class="small" id="planillaCount" style="margin-top:10px"></div>
+      </div>
+
+      <!-- AGUINALDO TAB -->
+      <div id="tab-aguinaldo" style="display:none">
+        <h2 style="margin:0 0 10px">Aguinaldo</h2>
+        <div class="small" style="margin-bottom:12px">Usa <b>Base aguinaldo</b> (Subtotal) de la hoja Planilla dentro del periodo 01/dic → 30/nov.</div>
+
+        <div class="mid-grid">
+          <div class="field">
+            <div class="t">Empleado</div>
+            <select class="sel" id="aEmpleado"></select>
+          </div>
+          <div class="field">
+            <div class="t">Año pago (diciembre)</div>
+            <input class="inp" id="aAnio" type="number" />
+          </div>
+          <div class="field">
+            <div class="t">&nbsp;</div>
+            <button id="btnCalcAguinaldo" class="primary" style="width:100%">Calcular</button>
+          </div>
+        </div>
+
+        <div class="small" style="margin-top:10px">Periodo: <span id="aPeriodo"></span></div>
+
+        <div class="kpis" style="margin-top:14px">
+          <div class="kpi"><span class="name">Total base periodo</span><span class="val" id="aTotal">¢ 0,00</span></div>
+          <div class="kpi"><span class="name">Aguinaldo (=Total/12)</span><span class="val" id="aMonto">¢ 0,00</span></div>
+          <div class="kpi"><span class="name">Promedio mensual</span><span class="val" id="aProm">¢ 0,00</span></div>
+          <div class="kpi"><span class="name">Registros en periodo</span><span class="val" id="aN">0</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== State =====
+  let wb = null;
+  let originalBuf = null; // ArrayBuffer del archivo original (para conservar formato)
+  let pendingUpdates = []; // {sheet, addr, value}
+  let fileName = "";
+  let empleados = []; // {codigo, nombre, vh, vhe, activo}
+  let params = { anio: 2026, hpd: 8, factorF: 1, tasaCCSS: 0.1083, freq: "Quincenal" };
+
+  // ===== Helpers =====
+  const $ = (id) => document.getElementById(id);
+
+  function toNumberAny(x){
+    let s = (x ?? "").toString().trim();
+    if(!s) return 0;
+    s = s.replace(/[₡¢\s\u00A0]/g,"");
+    const lastDot = s.lastIndexOf(".");
+    const lastCom = s.lastIndexOf(",");
+    if(lastDot>-1 && lastCom>-1){
+      if(lastDot > lastCom){ s = s.replace(/,/g,""); }
+      else { s = s.replace(/\./g,"").replace(",","."); }
+    }else if(lastCom>-1){
+      if(s.length-lastCom<=3){ s = s.replace(",","."); }
+      else { s = s.replace(/,/g,""); }
+    }else if(lastDot>-1){
+      if(s.length-lastDot<=3){ /* ok */ }
+      else { s = s.replace(/\./g,""); }
+    }
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function crc(n){
+    // usamos "¢" porque "₡" en algunos entornos se ve mal
+    return "¢ " + (n||0).toLocaleString("es-CR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+
+  function dateToISO(d){
+    const pad = (x)=>String(x).padStart(2,"0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+
+  function parseExcelDate(v){
+    // SheetJS puede traer Date, string ISO, o número (serial)
+    if(v instanceof Date) return v;
+    if(typeof v === "string"){
+      const d = new Date(v);
+      if(!isNaN(d)) return d;
+    }
+    if(typeof v === "number"){
+      // Excel serial to JS Date (rough; enough for our use)
+      const utc_days = Math.floor(v - 25569);
+      const utc_value = utc_days * 86400;
+      return new Date(utc_value * 1000);
+    }
+    return null;
+  }
+
+  function getCell(ws, addr){
+    if(!ws[addr]) ws[addr] = { t:"z", v: null };
+    return ws[addr];
+  }
+
+  function setCellValue(ws, addr, value){
+    const c = getCell(ws, addr);
+    if(value === null || value === ""){ c.t="z"; c.v=null; delete c.w; return; }
+    if(value instanceof Date){
+      c.t="d"; c.v=value; c.z="dd/mm/yyyy";
+      return;
+    }
+    if(typeof value === "number"){
+      c.t="n"; c.v=value; return;
+    }
+    c.t="s"; c.v=String(value);
+  }
+
+  function sheetByName(name){
+    return wb && wb.Sheets && wb.Sheets[name] ? wb.Sheets[name] : null;
+  }
+
+  function readParams(){
+    const ws = sheetByName("Parámetros");
+    if(!ws) return;
+    params.anio = (ws["B4"] && ws["B4"].v) ? Number(ws["B4"].v) : 2026;
+    params.hpd = (ws["B7"] && ws["B7"].v) ? Number(ws["B7"].v) : 8;
+    params.factorF = (ws["B8"] && ws["B8"].v) ? Number(ws["B8"].v) : 1;
+    params.tasaCCSS = (ws["B9"] && ws["B9"].v) ? Number(ws["B9"].v) : 0;
+    params.freq = (ws["B10"] && ws["B10"].v) ? String(ws["B10"].v) : "Quincenal";
+
+    $("pAnio").value = params.anio;
+    $("pHPD").value = params.hpd;
+    $("pFactorF").value = params.factorF;
+    $("pCCSS").value = params.tasaCCSS;
+    $("pFreq").value = params.freq;
+
+    $("aAnio").value = params.anio;
+  }
+
+  function readEmpleados(){
+    const ws = sheetByName("Empleados");
+    if(!ws) return;
+    // Read rows 3..200 (A:F)
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+    const out = [];
+    for(let r=2; r<=range.e.r; r++){ // 0-index, row 3 is r=2
+      const A = ws[XLSX.utils.encode_cell({r, c:0})];
+      const B = ws[XLSX.utils.encode_cell({r, c:1})];
+      const C = ws[XLSX.utils.encode_cell({r, c:2})];
+      const D = ws[XLSX.utils.encode_cell({r, c:3})];
+      const E = ws[XLSX.utils.encode_cell({r, c:4})];
+
+      if(!A || A.v===undefined || A.v===null || String(A.v).trim()==="") continue;
+
+      const codigo = String(A.v).trim();
+      const nombre = B ? String(B.v ?? "").trim() : "";
+      const vh = C ? Number(C.v || 0) : 0;
+
+      // VHE: si viene fórmula o vacío, usamos vh*1.5 por defecto
+      let vhe = 0;
+      if(D && typeof D.v === "number") vhe = Number(D.v);
+      else if(D && D.f){ vhe = vh * 1.5; }
+      else if(D && typeof D.v === "string" && D.v.trim() !== "") vhe = toNumberAny(D.v);
+      else vhe = vh * 1.5;
+
+      const activo = E ? String(E.v ?? "Sí").toLowerCase() : "sí";
+      out.push({codigo, nombre, vh, vhe, activo});
+    }
+    empleados = out;
+  }
+
+  function fillEmpleadoSelects(){
+    const act = empleados.filter(e => (e.activo||"").startsWith("s"));
+    const opt = act.map(e => `<option value="${e.codigo}">${e.codigo} - ${e.nombre}</option>`).join("");
+    $("fEmpleado").innerHTML = opt;
+    $("aEmpleado").innerHTML = opt;
+
+    // Filtro de planilla (opcional)
+    const pEmp = $("pEmpleado");
+    if(pEmp){
+      pEmp.innerHTML = `<option value="">Todos</option>` + opt;
+    }
+
+    syncEmpleadoToForm();
+  }
+
+  function syncEmpleadoToForm(){
+    const cod = $("fEmpleado").value;
+    const e = empleados.find(x=>x.codigo===cod);
+    $("fNombre").value = e ? e.nombre : "";
+    $("fVH").value = e ? crc(e.vh) : "";
+    $("fVHE").value = e ? crc(e.vhe) : "";
+    calcPreview();
+  }
+
+  function calcPreview(){
+    const cod = $("fEmpleado").value;
+    const e = empleados.find(x=>x.codigo===cod) || {vh:0, vhe:0};
+
+    const horas = toNumberAny($("fHoras").value);
+    const horasExtra = toNumberAny($("fHorasExtra").value);
+    const diasLibres = toNumberAny($("fDiasLibres").value);
+    const feriados = toNumberAny($("fFeriados").value);
+    const comida = toNumberAny($("fComida").value);
+
+    const bruto = horas * e.vh + horasExtra * e.vhe;
+    const subtotal = bruto + diasLibres * params.hpd * e.vh + feriados * params.hpd * e.vh * params.factorF;
+    const ccss = subtotal * params.tasaCCSS;
+    const neto = subtotal - ccss - comida;
+
+    $("kBruto").textContent = crc(bruto);
+    $("kSubtotal").textContent = crc(subtotal);
+    $("kCCSS").textContent = crc(ccss);
+    $("kNeto").textContent = crc(neto);
+
+    return {bruto, subtotal, ccss, neto};
+  }
+
+  function nextEmptyPlanillaRow(){
+    const ws = sheetByName("Planilla");
+    if(!ws) return null;
+    // Search from row 3 to 3000 for first empty "Código" (col B)
+    for(let row=3; row<=3000; row++){
+      const addr = "B"+row;
+      const cell = ws[addr];
+      if(!cell || cell.v===undefined || cell.v===null || String(cell.v).trim()===""){
+        return row;
+      }
+    }
+    return null;
+  }
+
+  function saveToPlanilla(){
+    $("formMsg").textContent = "";
+    $("formOk").textContent = "";
+
+    if(!wb){ $("formMsg").textContent="Primero cargá un Excel."; return; }
+    const ws = sheetByName("Planilla");
+    if(!ws){ $("formMsg").textContent="No encontré la hoja 'Planilla'."; return; }
+
+    if(!$("fFecha").value){ $("formMsg").textContent="Ingresá la fecha de pago."; return; }
+    const row = nextEmptyPlanillaRow();
+    if(!row){ $("formMsg").textContent="La hoja Planilla está llena (rango 3–3000)."; return; }
+
+    const fecha = new Date($("fFecha").value+"T00:00:00");
+    const codigo = $("fEmpleado").value;
+
+    const horas = toNumberAny($("fHoras").value);
+    const horasExtra = toNumberAny($("fHorasExtra").value);
+    const diasLibres = toNumberAny($("fDiasLibres").value);
+    const feriados = toNumberAny($("fFeriados").value);
+    const comida = toNumberAny($("fComida").value);
+
+    // Write only input columns (azul): A,B,D,F,I,J,M
+    setCellValue(ws, "A"+row, fecha);
+    setCellValue(ws, "B"+row, codigo);
+    setCellValue(ws, "D"+row, horas);
+    setCellValue(ws, "F"+row, horasExtra);
+    setCellValue(ws, "I"+row, diasLibres);
+    setCellValue(ws, "J"+row, feriados);
+    setCellValue(ws, "M"+row, comida);
+
+    // Record updates for formatted export
+    pendingUpdates.push({sheet:"Planilla", addr:"A"+row, value:fecha});
+    pendingUpdates.push({sheet:"Planilla", addr:"B"+row, value:codigo});
+    pendingUpdates.push({sheet:"Planilla", addr:"D"+row, value:horas});
+    pendingUpdates.push({sheet:"Planilla", addr:"F"+row, value:horasExtra});
+    pendingUpdates.push({sheet:"Planilla", addr:"I"+row, value:diasLibres});
+    pendingUpdates.push({sheet:"Planilla", addr:"J"+row, value:feriados});
+    pendingUpdates.push({sheet:"Planilla", addr:"M"+row, value:comida});
+
+    // Update ref if needed
+    const ref = ws["!ref"];
+    const rng = ref ? XLSX.utils.decode_range(ref) : {s:{r:0,c:0}, e:{r:0,c:0}};
+    const r0 = row-1;
+    if(r0 > rng.e.r) rng.e.r = r0;
+    if(15 > rng.e.c) rng.e.c = 15;
+    ws["!ref"] = XLSX.utils.encode_range(rng);
+
+    $("formOk").innerHTML = `<span class="ok">Guardado en Planilla (fila ${row}).</span>`;
+    renderPlanilla();
+  }
+
+  function readPlanillaRecords(){
+    const ws = sheetByName("Planilla");
+    if(!ws) return [];
+    const recs = [];
+    for(let row=3; row<=3000; row++){
+      const cCod = ws["B"+row];
+      if(!cCod || cCod.v===undefined || cCod.v===null || String(cCod.v).trim()==="") continue;
+
+      const codigo = String(cCod.v).trim();
+      const e = empleados.find(x=>x.codigo===codigo) || {nombre:"", vh:0, vhe:0};
+
+      const fecha = ws["A"+row] ? parseExcelDate(ws["A"+row].v) : null;
+      const horas = ws["D"+row] ? Number(ws["D"+row].v || 0) : 0;
+      const horasExtra = ws["F"+row] ? Number(ws["F"+row].v || 0) : 0;
+      const diasLibres = ws["I"+row] ? Number(ws["I"+row].v || 0) : 0;
+      const feriados = ws["J"+row] ? Number(ws["J"+row].v || 0) : 0;
+      const comida = ws["M"+row] ? Number(ws["M"+row].v || 0) : 0;
+
+      const bruto = horas * e.vh + horasExtra * e.vhe;
+      const subtotal = bruto + diasLibres * params.hpd * e.vh + feriados * params.hpd * e.vh * params.factorF;
+      const ccss = subtotal * params.tasaCCSS;
+      const neto = subtotal - ccss - comida;
+
+      recs.push({
+        row,
+        fecha,
+        codigo,
+        nombre: e.nombre,
+        bruto, subtotal, ccss, neto
+      });
+    }
+    // sort by fecha then row
+    recs.sort((a,b)=>{
+      const ta = a.fecha ? a.fecha.getTime() : 0;
+      const tb = b.fecha ? b.fecha.getTime() : 0;
+      if(ta!==tb) return ta-tb;
+      return a.row-b.row;
+    });
+    return recs;
+  }
+
+  
+  function renderEmpleados(){
+    const tbody = $("tblEmpleados");
+    if(!tbody) return;
+    const q = ($("empFilter") ? $("empFilter").value : "").toLowerCase().trim();
+    const list = empleados.slice().filter(e=>{
+      const hay = (e.codigo+" "+e.nombre+" "+(e.activo||"")).toLowerCase();
+      return !q || hay.includes(q);
+    });
+    tbody.innerHTML = list.map(e=>`
+      <tr>
+        <td>${e.codigo}</td>
+        <td>${e.nombre}</td>
+        <td class="num">${crc(e.vh)}</td>
+        <td class="num">${crc(e.vhe)}</td>
+        <td>${(e.activo||"").toString()}</td>
+      </tr>
+    `).join("");
+    const elCount = $("empCount");
+    if(elCount) elCount.textContent = `Empleados: ${list.length} (total: ${empleados.length})`;
+  }
+
+function renderPlanilla(){
+    const tbody = $("tblPlanilla");
+    if(!tbody) return;
+
+    const all = readPlanillaRecords();
+
+    // ===== Filtros (si existen en el DOM) =====
+    const cod = ($("pEmpleado") && $("pEmpleado").value) ? $("pEmpleado").value : "";
+    const d1  = ($("pDesde") && $("pDesde").value) ? new Date($("pDesde").value + "T00:00:00") : null;
+    const d2  = ($("pHasta") && $("pHasta").value) ? new Date($("pHasta").value + "T23:59:59") : null;
+
+    const recs = all.filter(r=>{
+      if(cod && r.codigo !== cod) return false;
+      if(d1 && r.fecha && r.fecha < d1) return false;
+      if(d1 && !r.fecha) return false;
+      if(d2 && r.fecha && r.fecha > d2) return false;
+      if(d2 && !r.fecha) return false;
+      return true;
+    });
+
+    tbody.innerHTML = recs.map(r=>`
+      <tr>
+        <td>${r.fecha ? r.fecha.toLocaleDateString("es-CR") : ""}</td>
+        <td>${r.codigo}</td>
+        <td>${r.nombre}</td>
+        <td class="num">${crc(r.bruto)}</td>
+        <td class="num">${crc(r.subtotal)}</td>
+        <td class="num">${crc(r.ccss)}</td>
+        <td class="num">${crc(r.neto)}</td>
+      </tr>
+    `).join("");
+
+    const msg = (cod || d1 || d2)
+      ? `Registros encontrados: ${recs.length} (de ${all.length} total)`
+      : `Registros encontrados: ${recs.length}`;
+    $("planillaCount").textContent = msg;
+  }
+
+  function calcAguinaldo(){
+    const cod = $("aEmpleado").value;
+    const anio = Number($("aAnio").value || params.anio);
+
+    const start = new Date(anio-1, 11, 1); // 01 dic
+    const end = new Date(anio, 10, 30);   // 30 nov
+
+    $("aPeriodo").textContent = `${start.toLocaleDateString("es-CR")} → ${end.toLocaleDateString("es-CR")}`;
+
+    const recs = readPlanillaRecords().filter(r => {
+      if(r.codigo !== cod) return false;
+      if(!r.fecha) return false;
+      return r.fecha >= start && r.fecha <= end;
+    });
+
+    const total = recs.reduce((acc,r)=>acc + r.subtotal, 0);
+    const agu = total/12;
+
+    $("aTotal").textContent = crc(total);
+    $("aMonto").textContent = crc(agu);
+    $("aProm").textContent = crc(total/12);
+    $("aN").textContent = String(recs.length);
+  }
+
+  async function downloadExcel(){
+  if(!wb) return;
+
+  // Si tenemos el archivo original y ExcelJS disponible, exportamos preservando formatos/estilos.
+  if(originalBuf && window.ExcelJS){
+    try{
+      const wb2 = new ExcelJS.Workbook();
+      // Mantener estilos y, si existiera, el calcChain
+      await wb2.xlsx.load(originalBuf);
+
+      // Aplicar únicamente las celdas que el formulario modifica
+      for(const u of pendingUpdates){
+        const ws2 = wb2.getWorksheet(u.sheet);
+        if(!ws2) continue;
+        const cell = ws2.getCell(u.addr);
+
+        if(u.value instanceof Date){
+          cell.value = u.value;
+          // Respetar el formato existente; si no hay, asignamos uno razonable
+          if(!cell.numFmt) cell.numFmt = "dd/mm/yyyy";
+        }else if(typeof u.value === "number"){
+          cell.value = u.value;
+        }else if(u.value === null || u.value === "" || typeof u.value === "undefined"){
+          cell.value = null;
+        }else{
+          cell.value = String(u.value);
+        }
+      }
+
+      const out = await wb2.xlsx.writeBuffer();
+      const blob = new Blob([out], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+      const a = document.createElement("a");
+      const cleanName = fileName ? fileName.replace(/\.(xlsx|xlsm|xls)$/i,"") : "planilla";
+      a.href = URL.createObjectURL(blob);
+      a.download = cleanName;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      return;
+    }catch(err){
+      console.warn("ExcelJS export falló, usando export básico:", err);
+    }
+  }
+
+  // Fallback: export básico (puede perder formatos según librería)
+  const out = XLSX.write(wb, { bookType:"xlsx", type:"array", cellDates:true });
+  const blob = new Blob([out], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  const a = document.createElement("a");
+  const cleanName = fileName ? fileName.replace(/\.(xlsx|xlsm|xls)$/i,"") : "planilla";
+  a.href = URL.createObjectURL(blob);
+  a.download = cleanName + "_actualizado.xlsx";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+  async function generarImagen(){
+    const el = $("captureArea");
+
+    // Capturamos el layout TAL CUAL se ve (sin forzar anchos), para que no se "estire".
+    const rect = el.getBoundingClientRect();
+    const w = Math.ceil(rect.width);
+    const h = Math.ceil(el.scrollHeight);
+
+    const canvas = await html2canvas(el, {
+      backgroundColor: "#ffffff",
+      // 2x suele dar buena nitidez sin cambiar el layout
+      scale: 2,
+      width: w,
+      height: h,
+      windowWidth: w,
+      windowHeight: h,
+      scrollX: 0,
+      scrollY: 0,
+      useCORS: true,
+      onclone: (doc)=>{
+        const clone = doc.getElementById("captureArea");
+        if(!clone) return;
+
+        // 1) Ocultar botones inferiores en la exportación
+        const actions = clone.querySelector(".form-actions");
+        if(actions) actions.style.display = "none";
+
+        // 2) Asegurar que el clon tenga el mismo ancho visible (evita "stretch")
+        clone.style.boxSizing = "border-box";
+        clone.style.maxWidth = "none";
+        clone.style.width = w + "px";
+        clone.style.paddingBottom = "28px"; // evita cortes abajo por sombras/bordes
+
+        // 3) html2canvas suele recortar texto en input/select.
+        //    Solución: reemplazarlos temporalmente por "cajas" (div) con el mismo estilo.
+        const fmtDate = (iso)=>{
+          if(!iso) return "";
+          // iso viene como YYYY-MM-DD
+          return iso;
+        };
+
+        const nodes = clone.querySelectorAll("input, select, textarea");
+        nodes.forEach((node)=>{
+          const tag = node.tagName.toLowerCase();
+          let value = "";
+
+          if(tag === "select"){
+            const opt = node.options && node.selectedIndex >= 0 ? node.options[node.selectedIndex] : null;
+            value = opt ? opt.textContent : "";
+          }else if(tag === "input"){
+            if(node.type === "date") value = fmtDate(node.value);
+            else value = node.value ?? "";
+          }else{
+            value = node.value ?? "";
+          }
+
+          if(!value){
+            // si está vacío, usar placeholder si existe
+            value = node.getAttribute("placeholder") || "";
+          }
+
+          const box = doc.createElement("div");
+          box.className = node.className; // mantiene .inp/.sel
+          box.textContent = value;
+
+          // hacer que el texto quede centrado verticalmente como un input
+          box.style.display = "flex";
+          box.style.alignItems = "center";
+          box.style.whiteSpace = "nowrap";
+          box.style.overflow = "hidden";
+          box.style.textOverflow = "ellipsis";
+
+          node.parentNode.replaceChild(box, node);
+        });
+      }
+    });
+
+    const a = document.createElement("a");
+    const cod = $("fEmpleado").value || "empleado";
+    const fecha = $("fFecha").value || "fecha";
+    a.download = `recibo_${cod}_${fecha}.png`;
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+  }
+
+  // ===== UI wiring =====
+  document.querySelectorAll(".navbtn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll(".navbtn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      const tab = btn.dataset.tab;
+      ["form","params","empleados","planilla","aguinaldo"].forEach(t=>{
+        $("tab-"+t).style.display = (t===tab) ? "" : "none";
+      });
+      if(tab==="planilla") renderPlanilla();
+      if(tab==="empleados") renderEmpleados();
+      if(tab==="aguinaldo") calcAguinaldo();
+    });
+  });
+
+  $("file").addEventListener("change", ()=>{
+    $("btnLoad").disabled = !$("file").files || $("file").files.length===0;
+    $("loadErr").textContent = "";
+  });
+
+  $("btnLoad").addEventListener("click", async ()=>{
+    const f = $("file").files[0];
+    if(!f) return;
+    fileName = f.name;
+    try{
+      const buf = await f.arrayBuffer();
+      originalBuf = buf.slice(0);
+      pendingUpdates = [];
+      wb = XLSX.read(buf, {type:"array", cellDates:true, cellFormula:true});
+      const ok = ["Parámetros","Empleados","Planilla","Aguinaldo"].every(n => wb.Sheets[n]);
+      if(!ok){
+        $("loadErr").textContent = "El archivo no parece ser la plantilla (faltan hojas: Parámetros/Empleados/Planilla/Aguinaldo).";
+        wb = null;
+        return;
+      }
+      readParams();
+      readEmpleados();
+      fillEmpleadoSelects();
+      // defaults
+      $("fFecha").value = dateToISO(new Date());
+      $("btnDownload").disabled = false;
+      $("fileInfo").textContent = "Archivo: " + fileName;
+      $("overlay").style.display = "none";
+      renderEmpleados();
+      renderPlanilla();
+      calcAguinaldo();
+    }catch(err){
+      console.error(err);
+      $("loadErr").textContent = "No pude abrir el Excel. Probá guardándolo como .xlsx y reintentá.";
+    }
+  });
+
+  $("btnReset").addEventListener("click", ()=>{
+    wb=null; fileName="";
+    $("fileInfo").textContent = "Archivo: (ninguno)";
+    $("btnDownload").disabled = true;
+    $("overlay").style.display = "flex";
+  });
+
+  $("btnDownload").addEventListener("click", downloadExcel);
+
+  // Empleados tab controls
+  $("btnEmpReload").addEventListener("click", ()=>{
+    if(!wb){ return; }
+    readEmpleados();
+    fillEmpleadoSelects();
+    renderEmpleados();
+  });
+  $("empFilter").addEventListener("input", renderEmpleados);
+
+
+  $("fEmpleado").addEventListener("change", syncEmpleadoToForm);
+
+  ["fHoras","fHorasExtra","fDiasLibres","fFeriados","fComida"].forEach(id=>{
+    $(id).addEventListener("input", ()=>calcPreview());
+  });
+
+  $("btnLimpiar").addEventListener("click", ()=>{
+    ["fHoras","fHorasExtra","fDiasLibres","fFeriados","fComida"].forEach(id=>$(id).value="");
+    $("formMsg").textContent="";
+    $("formOk").textContent="";
+    calcPreview();
+  });
+
+  $("btnGuardar").addEventListener("click", saveToPlanilla);
+
+  $("btnImg").addEventListener("click", generarImagen);
+
+  $("btnParamsReload").addEventListener("click", ()=>{
+    readParams();
+    calcPreview();
+    $("paramsMsg").textContent = "Recargado desde el Excel.";
+  });
+
+  $("btnParamsSave").addEventListener("click", ()=>{
+    if(!wb){ $("paramsMsg").textContent="Cargá un Excel primero."; return; }
+    const ws = sheetByName("Parámetros");
+    if(!ws){ $("paramsMsg").textContent="No encontré la hoja Parámetros."; return; }
+
+    const anio = Number($("pAnio").value || params.anio);
+    const hpd = toNumberAny($("pHPD").value);
+    const factorF = toNumberAny($("pFactorF").value);
+    const tasa = toNumberAny($("pCCSS").value);
+
+    setCellValue(ws, "B4", anio);
+    setCellValue(ws, "B7", hpd);
+    setCellValue(ws, "B8", factorF);
+    setCellValue(ws, "B9", tasa);
+
+    // reflect in memory
+    params.anio = anio; params.hpd=hpd; params.factorF=factorF; params.tasaCCSS=tasa;
+
+    $("aAnio").value = anio;
+    calcPreview();
+    renderPlanilla();
+    $("paramsMsg").innerHTML = `<span class="ok">Parámetros guardados.</span> Recordá descargar el Excel actualizado.`;
+  });
+
+  $("btnCalcAguinaldo").addEventListener("click", calcAguinaldo);
+
+  // Filtros de la vista Planilla
+  if($("pEmpleado")) $("pEmpleado").addEventListener("change", renderPlanilla);
+  if($("pDesde")) $("pDesde").addEventListener("change", renderPlanilla);
+  if($("pHasta")) $("pHasta").addEventListener("change", renderPlanilla);
+  if($("pClear")) $("pClear").addEventListener("click", ()=>{
+    if($("pEmpleado")) $("pEmpleado").value = "";
+    if($("pDesde")) $("pDesde").value = "";
+    if($("pHasta")) $("pHasta").value = "";
+    renderPlanilla();
+  });
+
+</script>
+</body>
+</html>
